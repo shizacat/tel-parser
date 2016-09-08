@@ -44,7 +44,7 @@ class cnr:
 		cur = self.conn.cursor()
 
 		try:
-			cur.execute("CREATE TABLE IF NOT EXISTS r%s (d varchar(128), n varchar(128), zp varchar(128), zv varchar(128), a varchar(128), du varchar(128), c varchar(128), dup varchar(128), f varchar(128), bd varchar(128), cur varchar(128), gmt varchar(128), s varchar(128), hd timestamp UNIQUE, hdu_s smallint, hc numeric(15,4))" %(self.nr,) )
+			cur.execute("CREATE TABLE IF NOT EXISTS %s (nr varchar(128), d varchar(128), n varchar(128), zp varchar(128), zv varchar(128), a varchar(128), du varchar(128), c varchar(128), dup varchar(128), f varchar(128), bd varchar(128), cur varchar(128), gmt varchar(128), s varchar(128), hd timestamp, hdu_s smallint, hc numeric(15,4), PRIMARY KEY(nr, hd, s))" %(DB_TABLE,) )
 			self.conn.commit()
 		except Exception as e:
 			raise ValueError(e)
@@ -79,10 +79,10 @@ class cnr:
 		cur = self.conn.cursor()
 		
 		try:
-			cur.execute("INSERT INTO r%s (d, n, zp, zv, a, du, c, dup, f, bd, cur, gmt, s, hd, hdu_s, hc) VALUES('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')" % (self.nr, value['d'], value['n'], value['zp'], value['zv'], value['a'], value['du'], value['c'], value['dup'], value['f'], value['bd'], value['cur'], value['gmt'], value['s'], hd, hdu_s, hc))
+			cur.execute("INSERT INTO %s (d, n, zp, zv, a, du, c, dup, f, bd, cur, gmt, s, hd, hdu_s, hc, nr) VALUES('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s','%s')" % (DB_TABLE, value['d'], value['n'], value['zp'], value['zv'], value['a'], value['du'], value['c'], value['dup'], value['f'], value['bd'], value['cur'], value['gmt'], value['s'], hd, hdu_s, hc, self.nr))
 		except psycopg2.IntegrityError:
 			self.valEDK += 1
-			self.arrEDK.append(str(hd))
+			self.arrEDK.append( str(hd) +", "+ str(value["s"]))
 			self.conn.rollback()
 		except Exception as e:
 			self.conn.commit()
@@ -118,7 +118,7 @@ def parse_xml(f_xml):
 				print("[!]", "[%s]"%(n,), e)
 
 		if not C_QUITE:
-			print("[I] Завершена обработка: %s. Stat: Дубликатов ключей = %s" % (n, db.valEDK))
+			print("[I] Завершена обработка: %s. Stat: Дубликатов ключей = %s. List: %s" % (n, db.valEDK, db.arrEDK))
 
 if __name__ == "__main__":
 	if len(sys.argv) <= 1:
