@@ -80,8 +80,8 @@ class cnr:
 		hn = re.search('\d+', value["n"])
 		if hn:
 			hn = hn.group(0)
-			# if re.search('^8\d+', hn):
-			# 	hn = re.sub('^8', '7', hn, 1);
+			if re.search('^8\d+', hn):
+				hn = re.sub('^8', '7', hn, 1);
 		else:
 			hn = ''
 
