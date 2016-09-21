@@ -44,7 +44,7 @@ class cnr:
 		cur = self.conn.cursor()
 
 		try:
-			cur.execute("CREATE TABLE IF NOT EXISTS %s (nr varchar(128), d varchar(128), n varchar(128), zp varchar(128), zv varchar(128), a varchar(128), du varchar(128), c varchar(128), dup varchar(128), f varchar(128), bd varchar(128), cur varchar(128), gmt varchar(128), s varchar(128), hd timestamp, hdu_s smallint, hc numeric(15,4), hn varchar(42), cdirection char(1), hnsyf varchar(128), PRIMARY KEY(nr, hd, s))" %(DB_TABLE,) )
+			cur.execute("CREATE TABLE IF NOT EXISTS %s (nr varchar(128), d varchar(128), n varchar(128), zp varchar(128), zv varchar(128), a varchar(128), du varchar(128), c varchar(128), dup varchar(128), f varchar(128), gmt varchar(128), s varchar(128), hd timestamp, hdu_s smallint, hc numeric(15,4), hn varchar(42), cdirection char(1), hnsyf varchar(128), PRIMARY KEY(nr, hd, s))" %(DB_TABLE,) )
 			self.conn.commit()
 		except Exception as e:
 			raise ValueError(e)
@@ -54,9 +54,10 @@ class cnr:
 	def __del__(self):
 		self.conn.close()
 
+	# Добавляем в базу - вызов(услугу) с его атрибутами
 	def add(self, value):
 		
-		attr_reqire = ['d', 'gmt', 'du', 'f', 'cur', 'dup', 'c', 'a', 'zv', 'n', 'zp', 's', 'bd']
+		attr_reqire = ['d', 'n', 'zv', 'zp', 'gmt', 'du', 'f', 'dup', 'c', 'a', 's' ] # 'cur', 'bd'
 
 		l = list(set(attr_reqire) - set(value.keys()))
 		if len(l) != 0:
@@ -80,8 +81,13 @@ class cnr:
 		hn = re.search('\d+', value["n"])
 		if hn:
 			hn = hn.group(0)
-			if re.search('^8\d+', hn):
-				hn = re.sub('^8', '7', hn, 1);
+			# Заменяем 8 в начале номера на 7
+			# if re.search('^8\d+', hn):
+			# 	hn = re.sub('^8', '+7', hn, 1);
+
+			# Заменяем 7 в начале номера на +7
+			if re.search('^7\d+', hn):
+				hn = re.sub('^7', '+7', hn, 1);
 		else:
 			hn = ''
 
@@ -91,7 +97,7 @@ class cnr:
 		else:
 			cdirection = 'o'
 
-		# hnsyf
+		# Суфикс поястения из номера сохраняем в отдельном поле
 		hnsyf = re.search('(?<=<--)[a-zA-Z0-9_-]+(?=:)', value["n"])
 		if hnsyf:
 			hnsyf = hnsyf.group(0)
@@ -102,7 +108,7 @@ class cnr:
 		cur = self.conn.cursor()
 		
 		try:
-			cur.execute("INSERT INTO %s (d, n, zp, zv, a, du, c, dup, f, bd, cur, gmt, s, hd, hdu_s, hc, nr, hn, cdirection, hnsyf) VALUES('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s','%s', '%s', '%s', '%s')" % (DB_TABLE, value['d'], value['n'], value['zp'], value['zv'], value['a'], value['du'], value['c'], value['dup'], value['f'], value['bd'], value['cur'], value['gmt'], value['s'], hd, hdu_s, hc, self.nr, hn, cdirection, hnsyf))
+			cur.execute("INSERT INTO %s (d, n, zp, zv, a, du, c, dup, f, gmt, s, hd, hdu_s, hc, nr, hn, cdirection, hnsyf) VALUES('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s','%s', '%s', '%s', '%s')" % (DB_TABLE, value['d'], value['n'], value['zp'], value['zv'], value['a'], value['du'], value['c'], value['dup'], value['f'], value['gmt'], value['s'], hd, hdu_s, hc, self.nr, hn, cdirection, hnsyf))
 		except psycopg2.IntegrityError:
 			self.valEDK += 1
 			self.arrEDK.append( str(hd) +", "+ str(value["s"]))
