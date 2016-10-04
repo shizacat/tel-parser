@@ -13,9 +13,10 @@
 # 
 
 import xml.etree.ElementTree as ET
-import psycopg2
+# import psycopg2
 from datetime import datetime, timezone
 import sys, os, re
+import argparse
 
 from io import StringIO
 
@@ -166,6 +167,22 @@ def setup():
 		print("Ошибка в запросе к бд: %s" % (e,))
 		sys.exit(-1)
 
+def setup_one():
+	lines = [
+		"CREATE TABLE IF NOT EXISTS num_one (doc_n varchar(128), doc_sim varchar(128), d varchar(128), n varchar(128), zp varchar(128), zv varchar(128), s varchar(128), a varchar(128), du varchar(128), c varchar(128), gmt varchar(128), dup varchar(128), cur varchar(128), hn varchar(42), hdu_s smallint, hc numeric(15,4), hd timestamp, cdirection char(1), hnsyf varchar(128),  PRIMARY KEY(doc_n, hd) )",
+	]
+	# doc_n
+	# n - номер из файла
+	# zp - зона направления
+	# zv - зона вызова
+	# s - сервис (sms i, sms o, Телеф., ...)
+	# hn - нормализованный номер
+	# hdu_s - продолжительность, в секундах
+	# hc - стоимость, NUMERIC(15,4)
+	# hd - дата вызова, без часового пояса
+	# cdirection - направление вызова (i - входящие, o - исходящие)
+	# hnsyf - суфикс из номера. Примеры: Ya_na_svyazi, sms, Vam_Zvonili
+
 # В нужный формат sql
 def dtohd(dt):
 	return datetime.strptime( dt , "%d.%m.%Y").date()
@@ -248,35 +265,71 @@ def parse_xml(f_xml):
 		db.conn.rollback()
 		db.execute("delete from invoices where bn='%s' and an='%s'" % ( bn, an ))
 
+# Разбираем xml файл для одной записи (телефонного номера)
+def parse_xml_one_mode(f_xml):
+	try:
+		tree = ET.parse(f_xml)
+	except Exception as e:
+		print("[!] Ошибка в файле:", f_xml)
+		return
+
+	root = tree.getroot()
+
+
+
 if __name__ == "__main__":
 
-	if len(sys.argv) <= 1:
-		print("Укажите имя файла или каталог")
-		sys.exit(-1)
+	parser = argparse.ArgumentParser()
+	parser.add_argument('-p', help='Имя файла или путь к каталогу с файлами')
+	
+	# Режим 
+	group = parser.add_mutually_exclusive_group(required=True)
+	group.add_argument('-o', help='Одиночный номер пользователя', action='store_true')
+	group.add_argument('-m', help='Много номеров', action='store_true')
+	group.add_argument('-s', help='Настройка базы', action='store_true')
+	
+	args = parser.parse_args()
 
-	if sys.argv[1].lower() == '-s':
-		print("Настраиваю базу")
+	if args.s:
+		print('Setup database mode')
 		setup()
 		sys.exit(0)
 
-	f = sys.argv[1]
+	if not args.p:
+		print('Не указан аргумент -p')
+		sys.exit(-1)
 
-	if os.path.isdir(f):
-		for l in os.listdir(f):
-			if not re.match(r'.*\.xml', l) or not os.path.isfile( os.path.join(f,l)):
-				continue
+	f = args.p
 
-			if not C_QUITE:
-				print("[I] Обработка файла:", os.path.join(f,l))
-			parse_xml( os.path.join(f,l))
-		sys.exit(0)
+	if args.o:
+		print('One mode')
 
-	if os.path.isfile(f):
-		parse_xml(f)
-		sys.exit(0)
+		if os.path.isdir(f):
+			for l in os.listdir(f):
+				if not re.match(r'.*\.xml', l) or not os.path.isfile( os.path.join(f,l)):
+					continue
+				
+				if not C_QUITE:
+					print("[I] Обработка файла:", os.path.join(f,l))
+				parse_xml_one_mode( os.path.join(f,l))
 
-	print("Что то вы мне не то передали")
-	sys.exit(-1)
+		if os.path.isfile(f):
+			parse_xml_one_mode( os.path.join(f,l))
+
+	if args.m:
+		print('Many mode')
+
+		if os.path.isdir(f):
+			for l in os.listdir(f):
+				if not re.match(r'.*\.xml', l) or not os.path.isfile( os.path.join(f,l)):
+					continue
+
+				if not C_QUITE:
+					print("[I] Обработка файла:", os.path.join(f,l))
+				parse_xml( os.path.join(f,l))
+
+		if os.path.isfile(f):
+			parse_xml(f)
 
 
 
