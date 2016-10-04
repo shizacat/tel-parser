@@ -13,7 +13,7 @@
 # 
 
 import xml.etree.ElementTree as ET
-# import psycopg2
+import psycopg2
 from datetime import datetime, timezone
 import sys, os, re
 import argparse
@@ -52,24 +52,9 @@ class bill:
 		self.conn.commit()
 		cur.close
 
-	def add_detail_commit(self):
-		cur = self.conn.cursor()
-		self.add_buf.seek(0)
-		
-		try:
-			cur.copy_expert("copy details (bn, an, d, n, zp, zv, a, du, c, dup, f, gmt, s, hd, hdu_s, hc, nr, hn, cdirection, hnsyf) from STDIN" % (), self.add_buf)
-		except Exception as e:
-			self.conn.commit()
-			raise ValueError("Ошибка в запросе к бд: %s" % (e,))
-
-		self.conn.commit()
-		cur.close
-
-		self.add_buf.close()
-		self.add_buf = StringIO()
-
-
-	def add_detail(self, bn, an, nr, value):
+	# Добавляем и провермяем поля
+	def filter(self, v):
+		value = v
 		attr_reqire = ['d', 'n', 'zv', 'zp', 'gmt', 'du', 'f', 'dup', 'c', 'a', 's' ]
 
 		l = list(set(attr_reqire) - set(value.keys()))
@@ -95,8 +80,8 @@ class bill:
 		if hn:
 			hn = hn.group(0)
 			# Заменяем 8 в начале номера на 7
-			# if re.search('^8\d+', hn):
-			# 	hn = re.sub('^8', '+7', hn, 1);
+			if re.search('^8\d+', hn):
+				hn = re.sub('^8', '+7', hn, 1);
 
 			# Заменяем 7 в начале номера на +7
 			# if re.search('^7\d+', hn):
@@ -121,6 +106,36 @@ class bill:
 		else:
 			hnsyf = ''
 
+		value["hd"] = hd
+		value["hdu_s"] = hdu_s
+		value["hc"] = hc
+		value["hn"] = hn
+		value["cdirection"] = cdirection
+		value["hnsyf"] = hnsyf
+
+		return value
+
+	def add_detail_commit(self):
+		cur = self.conn.cursor()
+		self.add_buf.seek(0)
+		
+		try:
+			cur.copy_expert("copy details (bn, an, d, n, zp, zv, a, du, c, dup, f, gmt, s, hd, hdu_s, hc, nr, hn, cdirection, hnsyf) from STDIN" % (), self.add_buf)
+		except Exception as e:
+			self.conn.commit()
+			raise ValueError("Ошибка в запросе к бд: %s" % (e,))
+
+		self.conn.commit()
+		cur.close
+
+		self.add_buf.close()
+		self.add_buf = StringIO()
+
+
+	def add_detail(self, bn, an, nr, value):
+		
+		value = self.filter(value)
+
 
 		# IO
 		# self.add_buf.write( "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (bn, an, value['d'], value['n'], value['zp'], value['zv'], value['a'], value['du'], value['c'], value['dup'], value['f'], value['gmt'], value['s'], hd, hdu_s, hc, nr, hn, cdirection, hnsyf ))
@@ -128,7 +143,7 @@ class bill:
 		cur = self.conn.cursor()
 		
 		try:
-			cur.execute("INSERT INTO details (bn, an, d, n, zp, zv, a, du, c, dup, f, gmt, s, hd, hdu_s, hc, nr, hn, cdirection, hnsyf) VALUES('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s','%s', '%s', '%s', '%s')" % (bn, an, value['d'], value['n'], value['zp'], value['zv'], value['a'], value['du'], value['c'], value['dup'], value['f'], value['gmt'], value['s'], hd, hdu_s, hc, nr, hn, cdirection, hnsyf))
+			cur.execute("INSERT INTO details (bn, an, d, n, zp, zv, a, du, c, dup, f, gmt, s, hd, hdu_s, hc, nr, hn, cdirection, hnsyf) VALUES('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s','%s', '%s', '%s', '%s')" % (bn, an, value['d'], value['n'], value['zp'], value['zv'], value['a'], value['du'], value['c'], value['dup'], value['f'], value['gmt'], value['s'], value["hd"], value["hdu_s"], value["hc"], nr, value["hn"], value["cdirection"], value["hnsyf"]))
 		except psycopg2.IntegrityError:
 			if not C_QUITE:
 				print("Дубликат ключей: %s" % ( value))
@@ -140,6 +155,27 @@ class bill:
 		self.conn.commit()
 
 		cur.close
+
+	def add_one_detail(self, value, unn, nr):
+
+		value = self.filter(value)
+
+		cur = self.conn.cursor()
+		
+		try:
+			cur.execute("INSERT INTO one_detail (d, n, zp, zv, a, du, c, dup, f, gmt, s, hd, hdu_s, hc, hn, cdirection, hnsyf, nr, unn) VALUES('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s','%s', '%s', '%s')" % (value['d'], value['n'], value['zp'], value['zv'], value['a'], value['du'], value['c'], value['dup'], value['f'], value['gmt'], value['s'], value["hd"], value["hdu_s"], value["hc"], value["hn"], value["cdirection"], value["hnsyf"], nr, unn) )
+		except psycopg2.IntegrityError:
+			if not C_QUITE:
+				print("Дубликат ключей: %s" % ( value))
+			self.conn.rollback()
+		except Exception as e:
+			self.conn.commit()
+			raise ValueError("Ошибка в запросе к бд: %s" % (e,))
+
+		self.conn.commit()
+
+		cur.close
+
 
 
 def setup():
@@ -169,21 +205,28 @@ def setup():
 
 def setup_one():
 	lines = [
-		"CREATE TABLE IF NOT EXISTS num_one (doc_n varchar(128), doc_sim varchar(128), d varchar(128), n varchar(128), zp varchar(128), zv varchar(128), s varchar(128), a varchar(128), du varchar(128), c varchar(128), gmt varchar(128), dup varchar(128), cur varchar(128), hn varchar(42), hdu_s smallint, hc numeric(15,4), hd timestamp, cdirection char(1), hnsyf varchar(128),  PRIMARY KEY(doc_n, hd) )",
+		"DROP TABLE IF EXISTS one_doc, one_detail",
+		"CREATE TABLE IF NOT EXISTS one_doc ( nr varchar(128), sd Date, ed Date, unn BIGSERIAL UNIQUE, PRIMARY KEY (nr, sd, ed))",
+		"CREATE TABLE IF NOT EXISTS one_detail (d varchar(128), n varchar(128), zp varchar(128), zv varchar(128), a varchar(128), du varchar(128), c varchar(128), dup varchar(128), f varchar(128), gmt varchar(128), s varchar(128), hd timestamp, hdu_s smallint, hc numeric(15,4), hn varchar(42), cdirection char(1), hnsyf varchar(128), nr varchar(128), unn bigint REFERENCES one_doc(unn) ON DELETE CASCADE)",		
 	]
-	# doc_n
-	# n - номер из файла
-	# zp - зона направления
-	# zv - зона вызова
-	# s - сервис (sms i, sms o, Телеф., ...)
-	# hn - нормализованный номер
-	# hdu_s - продолжительность, в секундах
-	# hc - стоимость, NUMERIC(15,4)
-	# hd - дата вызова, без часового пояса
-	# cdirection - направление вызова (i - входящие, o - исходящие)
-	# hnsyf - суфикс из номера. Примеры: Ya_na_svyazi, sms, Vam_Zvonili
 
-# В нужный формат sql
+	try:
+		conn = psycopg2.connect("dbname='%s' user='%s' host='%s' password='%s'" % (DB_NAME, DB_USER, DB_HOST, DB_PASS))
+
+		cur = conn.cursor()
+
+		for sql in lines:
+			cur.execute(sql)
+		
+		conn.commit()
+		cur.close
+
+	except Exception as e:
+		print("Ошибка в запросе к бд: %s" % (e,))
+		sys.exit(-1)
+
+
+# Преобразует дату из строки в нужный формат sql
 def dtohd(dt):
 	return datetime.strptime( dt , "%d.%m.%Y").date()
 
@@ -275,6 +318,36 @@ def parse_xml_one_mode(f_xml):
 
 	root = tree.getroot()
 
+	tmp_ds = root.findall("ds")[0].attrib	
+	nr = tmp_ds["n"]
+	sd = tmp_ds["sd"]
+	ed = tmp_ds["ed"]
+	unn = None
+
+	db = bill()
+
+	try:
+		db.execute("INSERT INTO one_doc (nr, sd, ed) VALUES('%s', '%s', '%s') " % ( nr, dtohd(sd), dtohd(ed) ))
+
+		cur = db.conn.cursor()
+		try:
+			cur.execute("SELECT unn FROM one_doc where nr='%s' and sd='%s' and ed='%s' " % (nr, dtohd(sd), dtohd(ed)) )
+			unn = cur.fetchall()[0][0]
+		except Exception as e:
+			raise ValueError("Ошибка в запросе к бд: %s" % (e,)) 
+		
+		db.conn.commit()
+		cur.close
+
+		# --------------
+		for i in root.findall("./ds/i"):
+			db.add_one_detail(i.attrib, unn, nr)
+
+	except Exception as e:
+		print("Ошибка в запросе к бд: %s" % (e,))
+		db.conn.rollback()
+		db.execute("delete from one_doc where nr='%s' and sd='%s' and ed='%s'" % ( nr, sd, ed ))
+	
 
 
 if __name__ == "__main__":
@@ -287,12 +360,18 @@ if __name__ == "__main__":
 	group.add_argument('-o', help='Одиночный номер пользователя', action='store_true')
 	group.add_argument('-m', help='Много номеров', action='store_true')
 	group.add_argument('-s', help='Настройка базы', action='store_true')
+	group.add_argument('-os', help='Настройка базы для одиночного режима', action='store_true')
 	
 	args = parser.parse_args()
 
 	if args.s:
 		print('Setup database mode')
 		setup()
+		sys.exit(0)
+
+	if args.os:
+		print('Setup database for one mode')
+		setup_one()
 		sys.exit(0)
 
 	if not args.p:
@@ -314,7 +393,7 @@ if __name__ == "__main__":
 				parse_xml_one_mode( os.path.join(f,l))
 
 		if os.path.isfile(f):
-			parse_xml_one_mode( os.path.join(f,l))
+			parse_xml_one_mode(f)
 
 	if args.m:
 		print('Many mode')
