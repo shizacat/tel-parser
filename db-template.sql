@@ -50,7 +50,7 @@ ssa_a - Итого
 
 
 -- Детализация номеров
-CREATE TABLE IF NOT EXISTS details (bn integer, an varchar(128), nr varchar(128), d varchar(128), n varchar(128), zp varchar(128), zv varchar(128), a varchar(128), du varchar(128), c varchar(128), dup varchar(128), f varchar(128), gmt varchar(128), s varchar(128), hd timestamp, hdu_s smallint, hc numeric(15,4), hn varchar(42), cdirection char(1), hnsyf varchar(128), FOREIGN KEY (bn, an) REFERENCES invoices(bn, an) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS details (bn integer DEFAULT NULL, an varchar(128) DEFAULT NULL, nr varchar(128), d varchar(128), n varchar(128), zp varchar(128), zv varchar(128), a varchar(128), du varchar(128), c varchar(128), dup varchar(128), f varchar(128), gmt varchar(128), s varchar(128), hd timestamp, hdu_s smallint, hc numeric(15,4), hn varchar(42), cdirection char(1), hnsyf varchar(128), FOREIGN KEY (bn, an) REFERENCES invoices(bn, an) ON DELETE CASCADE, unn bigint DEFAULT NULL REFERENCES one_doc(unn) ON DELETE CASCADE );
 
 nr - сетевой ресурс (номер телефона)
 d 
@@ -78,21 +78,6 @@ hnsyf - суфикс из номера. Примеры: Ya_na_svyazi, sms, Vam_Z
 -- Для гражданских номеров
 -- Режим one
 -- =======================
-
-
-CREATE TABLE IF NOT EXISTS one_detail (d varchar(128), n varchar(128), zp varchar(128), zv varchar(128), a varchar(128), du varchar(128), c varchar(128), dup varchar(128), f varchar(128), gmt varchar(128), s varchar(128), hd timestamp, hdu_s smallint, hc numeric(15,4), hn varchar(42), cdirection char(1), hnsyf varchar(128), nr varchar(128), unn bigint REFERENCES one_doc(unn) ON DELETE CASCADE)
-
-n - номер из файла
-zp - зона направления
-zv - зона вызова
-s - сервис (sms i, sms o, Телеф., ...)
-hn - нормализованный номер
-hdu_s - продолжительность, в секундах
-hc - стоимость, NUMERIC(15,4)
-hd - дата вызова, без часового пояса
-cdirection - направление вызова (i - входящие, o - исходящие)
-hnsyf - суфикс из номера. Примеры: Ya_na_svyazi, sms, Vam_Zvonili
-nr - сетевой ресурс
 
 CREATE TABLE IF NOT EXISTS one_doc ( nr varchar(128), sd Date, ed Date, unn BIGSERIAL UNIQUE, PRIMARY KEY (nr, sd, ed))
 

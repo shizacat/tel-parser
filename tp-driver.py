@@ -163,7 +163,7 @@ class bill:
 		cur = self.conn.cursor()
 		
 		try:
-			cur.execute("INSERT INTO one_detail (d, n, zp, zv, a, du, c, dup, f, gmt, s, hd, hdu_s, hc, hn, cdirection, hnsyf, nr, unn) VALUES('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s','%s', '%s', '%s')" % (value['d'], value['n'], value['zp'], value['zv'], value['a'], value['du'], value['c'], value['dup'], value['f'], value['gmt'], value['s'], value["hd"], value["hdu_s"], value["hc"], value["hn"], value["cdirection"], value["hnsyf"], nr, unn) )
+			cur.execute("INSERT INTO details (d, n, zp, zv, a, du, c, dup, f, gmt, s, hd, hdu_s, hc, hn, cdirection, hnsyf, nr, unn) VALUES('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s','%s', '%s', '%s')" % (value['d'], value['n'], value['zp'], value['zv'], value['a'], value['du'], value['c'], value['dup'], value['f'], value['gmt'], value['s'], value["hd"], value["hdu_s"], value["hc"], value["hn"], value["cdirection"], value["hnsyf"], nr, unn) )
 		except psycopg2.IntegrityError:
 			if not C_QUITE:
 				print("Дубликат ключей: %s" % ( value))
@@ -180,12 +180,14 @@ class bill:
 
 def setup():
 	lines = [
-	"DROP TABLE IF EXISTS invoices, rrp, pai, upss, details",
+	"DROP TABLE IF EXISTS invoices, rrp, pai, upss, details, one_doc",
+	"CREATE TABLE IF NOT EXISTS one_doc ( nr varchar(128), sd Date, ed Date, unn BIGSERIAL UNIQUE, PRIMARY KEY (nr, sd, ed))",
+
 	"CREATE TABLE IF NOT EXISTS invoices (bn integer UNIQUE, an varchar(128), sd Date, ed Date, bd Date, pn varchar(256), ha numeric(15,4), hua numeric(15,4), hr numeric(15,4), od varchar(64), PRIMARY KEY(bn, an) )",
 	"CREATE TABLE IF NOT EXISTS rrp (bn integer, an varchar(128), cn varchar(128), n varchar(128), mr varchar(256), reg varchar(256), ha numeric(15,4), hua numeric(15,4), hr numeric(15,4),  FOREIGN KEY (bn, an) REFERENCES invoices ON DELETE CASCADE, PRIMARY KEY(bn, an, cn) )",
 	"CREATE TABLE IF NOT EXISTS pai (bn integer, an varchar(128), cn varchar(128), pa varchar(128), ha numeric(15,4), hua numeric(15,4), hr numeric(15,4), FOREIGN KEY (bn, an, cn) REFERENCES rrp ON DELETE CASCADE, PRIMARY KEY(bn, an, cn, pa))",
 	"CREATE TABLE IF NOT EXISTS upss (bn integer, an varchar(128), pa varchar(128), m varchar(128), ssp_ha numeric(15,4), sso_ha numeric(15,4), sst_ha numeric(15,4), ssn_ha numeric(15,4), ssa_ha numeric(15,4), FOREIGN KEY (bn, an) REFERENCES invoices(bn, an) ON DELETE CASCADE, PRIMARY KEY(bn, an, pa, m) )",
-	"CREATE TABLE IF NOT EXISTS details (bn integer, an varchar(128), nr varchar(128), d varchar(128), n varchar(128), zp varchar(128), zv varchar(128), a varchar(128), du varchar(128), c varchar(128), dup varchar(128), f varchar(128), gmt varchar(128), s varchar(128), hd timestamp, hdu_s smallint, hc numeric(15,4), hn varchar(42), cdirection char(1), hnsyf varchar(128), FOREIGN KEY (bn, an) REFERENCES invoices(bn, an) ON DELETE CASCADE)",
+	"CREATE TABLE IF NOT EXISTS details (bn integer DEFAULT NULL, an varchar(128) DEFAULT NULL, nr varchar(128), d varchar(128), n varchar(128), zp varchar(128), zv varchar(128), a varchar(128), du varchar(128), c varchar(128), dup varchar(128), f varchar(128), gmt varchar(128), s varchar(128), hd timestamp, hdu_s smallint, hc numeric(15,4), hn varchar(42), cdirection char(1), hnsyf varchar(128), FOREIGN KEY (bn, an) REFERENCES invoices(bn, an) ON DELETE CASCADE, unn bigint DEFAULT NULL REFERENCES one_doc(unn) ON DELETE CASCADE )",
 	]
 
 	try:
@@ -203,11 +205,11 @@ def setup():
 		print("Ошибка в запросе к бд: %s" % (e,))
 		sys.exit(-1)
 
-def setup_one():
+def migrate():
 	lines = [
-		"DROP TABLE IF EXISTS one_doc, one_detail",
-		"CREATE TABLE IF NOT EXISTS one_doc ( nr varchar(128), sd Date, ed Date, unn BIGSERIAL UNIQUE, PRIMARY KEY (nr, sd, ed))",
-		"CREATE TABLE IF NOT EXISTS one_detail (d varchar(128), n varchar(128), zp varchar(128), zv varchar(128), a varchar(128), du varchar(128), c varchar(128), dup varchar(128), f varchar(128), gmt varchar(128), s varchar(128), hd timestamp, hdu_s smallint, hc numeric(15,4), hn varchar(42), cdirection char(1), hnsyf varchar(128), nr varchar(128), unn bigint REFERENCES one_doc(unn) ON DELETE CASCADE)",		
+		"ALTER TABLE details ALTER COLUMN bn SET DEFAULT NULL",
+		"ALTER TABLE details ALTER COLUMN an SET DEFAULT NULL",
+		"ALTER TABLE details ADD unn bigint DEFAULT NULL REFERENCES one_doc(unn) ON DELETE CASCADE",
 	]
 
 	try:
@@ -224,7 +226,6 @@ def setup_one():
 	except Exception as e:
 		print("Ошибка в запросе к бд: %s" % (e,))
 		sys.exit(-1)
-
 
 # Преобразует дату из строки в нужный формат sql
 def dtohd(dt):
@@ -348,8 +349,6 @@ def parse_xml_one_mode(f_xml):
 		db.conn.rollback()
 		db.execute("delete from one_doc where nr='%s' and sd='%s' and ed='%s'" % ( nr, sd, ed ))
 	
-
-
 if __name__ == "__main__":
 
 	parser = argparse.ArgumentParser()
@@ -360,7 +359,7 @@ if __name__ == "__main__":
 	group.add_argument('-o', help='Одиночный номер пользователя', action='store_true')
 	group.add_argument('-m', help='Много номеров', action='store_true')
 	group.add_argument('-s', help='Настройка базы', action='store_true')
-	group.add_argument('-os', help='Настройка базы для одиночного режима', action='store_true')
+	group.add_argument('-a', help='Миграция базы. Только таблицы details.', action='store_true')
 	
 	args = parser.parse_args()
 
@@ -369,9 +368,9 @@ if __name__ == "__main__":
 		setup()
 		sys.exit(0)
 
-	if args.os:
-		print('Setup database for one mode')
-		setup_one()
+	if args.a:
+		print('Setup database - migration')
+		migrate()
 		sys.exit(0)
 
 	if not args.p:
