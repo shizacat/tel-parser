@@ -17,6 +17,8 @@ import psycopg2
 from datetime import datetime, timezone
 import sys, os, re
 import argparse
+import zipfile
+import shutil
 
 from io import StringIO
 
@@ -46,6 +48,9 @@ class bill:
 		cur = self.conn.cursor()
 		try:
 			cur.execute(sql)
+		except psycopg2.IntegrityError as e:
+			self.conn.rollback()
+			raise
 		except Exception as e:
 			raise ValueError("Ошибка в запросе к бд: %s" % (e,)) 
 		
@@ -304,6 +309,8 @@ def parse_xml(f_xml):
 			if not C_QUITE:
 		 		print("[I] Завершена обработка: %s" % (nr))
 	
+	except psycopg2.IntegrityError as e:
+		print("Внимание: дубликат ключей в базе")
 	except Exception as e:
 		print("Ошибка в запросе к бд: %s" % (e,))
 		db.conn.rollback()
@@ -344,11 +351,50 @@ def parse_xml_one_mode(f_xml):
 		for i in root.findall("./ds/i"):
 			db.add_one_detail(i.attrib, unn, nr)
 
+	except psycopg2.IntegrityError as e:
+		print("\tВнимание: дубликат ключей в базе")
 	except Exception as e:
 		print("Ошибка в запросе к бд: %s" % (e,))
 		db.conn.rollback()
 		db.execute("delete from one_doc where nr='%s' and sd='%s' and ed='%s'" % ( nr, sd, ed ))
-	
+
+# Обработка пути на предмет: директорий, zip архива, xml файлов
+# и запуск соответствующей функции для их обработки
+def path_processing(func_processing, path):
+	unzip = False;
+	tmp_dir = ".tmp"
+
+	if os.path.isfile(path) and os.path.split(path)[1].split('.')[-1].lower() == 'zip' and zipfile.is_zipfile(path):
+		unzip = True
+		if os.path.isdir( tmp_dir):
+			shutil.rmtree(tmp_dir)
+		os.mkdir(tmp_dir)
+
+		zip_ref = zipfile.ZipFile(path, 'r')
+		zip_ref.extractall(tmp_dir)
+		zip_ref.close()
+
+		path = tmp_dir
+
+	if os.path.isfile(path):
+		func_processing(path)
+
+	if os.path.isdir(path):
+		for l in os.listdir(path):
+			if re.match(r'.*\.zip', l) and zipfile.is_zipfile( os.path.join(path,l)):
+				path_processing(func_processing, os.path.join(path,l))
+				continue
+
+			if not re.match(r'.*\.xml', l) or not os.path.isfile( os.path.join(path,l)):
+				continue
+			
+			if not C_QUITE:
+				print("[I] Обработка файла:", os.path.join(path,l))
+			func_processing( os.path.join(path,l))
+
+	if unzip:
+		shutil.rmtree(tmp_dir)
+
 if __name__ == "__main__":
 
 	parser = argparse.ArgumentParser()
@@ -382,35 +428,10 @@ if __name__ == "__main__":
 	if args.o:
 		print('One mode')
 
-		if os.path.isdir(f):
-			for l in os.listdir(f):
-				if not re.match(r'.*\.xml', l) or not os.path.isfile( os.path.join(f,l)):
-					continue
-				
-				if not C_QUITE:
-					print("[I] Обработка файла:", os.path.join(f,l))
-				parse_xml_one_mode( os.path.join(f,l))
-
-		if os.path.isfile(f):
-			parse_xml_one_mode(f)
+		path_processing(parse_xml_one_mode, f)
 
 	if args.m:
 		print('Many mode')
 
-		if os.path.isdir(f):
-			for l in os.listdir(f):
-				if not re.match(r'.*\.xml', l) or not os.path.isfile( os.path.join(f,l)):
-					continue
-
-				if not C_QUITE:
-					print("[I] Обработка файла:", os.path.join(f,l))
-				parse_xml( os.path.join(f,l))
-
-		if os.path.isfile(f):
-			parse_xml(f)
-
-
-
-
-
+		path_processing(parse_xml, f)
 
