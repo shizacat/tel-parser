@@ -32,9 +32,10 @@ DB_TABLE='main'
 C_QUITE=False
 
 class bill:
-	add_buf = StringIO()
+	add_buf = None
 
 	def __init__(self):
+		self.add_buf = StringIO()
 		try:
 			self.conn = psycopg2.connect("dbname='%s' user='%s' host='%s' password='%s'" % (DB_NAME, DB_USER, DB_HOST, DB_PASS))
 		except Exception as e:
@@ -42,6 +43,7 @@ class bill:
 			raise ValueError
 
 	def __del__(self):
+		self.add_buf.close()
 		self.conn.close()
 
 	def execute(self, sql):
@@ -123,9 +125,25 @@ class bill:
 	def add_detail_commit(self):
 		cur = self.conn.cursor()
 		self.add_buf.seek(0)
-		
+
 		try:
 			cur.copy_expert("copy details (bn, an, d, n, zp, zv, a, du, c, dup, f, gmt, s, hd, hdu_s, hc, nr, hn, cdirection, hnsyf) from STDIN" % (), self.add_buf)
+		except Exception as e:
+			self.conn.commit()
+			raise ValueError("Ошибка в запросе к бд: %s" % (e,))
+
+		self.conn.commit()
+		cur.close
+
+		self.add_buf.close()
+		self.add_buf = StringIO()
+
+	def add_one_detail_commit(self):
+		cur = self.conn.cursor()
+		self.add_buf.seek(0)
+
+		try:
+			cur.copy_expert("copy details (d, n, zp, zv, a, du, c, dup, f, gmt, s, hd, hdu_s, hc, hn, cdirection, hnsyf, nr, unn) from STDIN" % (), self.add_buf)
 		except Exception as e:
 			self.conn.commit()
 			raise ValueError("Ошибка в запросе к бд: %s" % (e,))
@@ -143,43 +161,45 @@ class bill:
 
 
 		# IO
-		# self.add_buf.write( "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (bn, an, value['d'], value['n'], value['zp'], value['zv'], value['a'], value['du'], value['c'], value['dup'], value['f'], value['gmt'], value['s'], hd, hdu_s, hc, nr, hn, cdirection, hnsyf ))
+		self.add_buf.write( "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (bn, an, value['d'], value['n'], value['zp'], value['zv'], value['a'], value['du'], value['c'], value['dup'], value['f'], value['gmt'], value['s'], value["hd"], value["hdu_s"], value["hc"], nr, value["hn"], value["cdirection"], value["hnsyf"] ))
 
-		cur = self.conn.cursor()
+		# cur = self.conn.cursor()
 		
-		try:
-			cur.execute("INSERT INTO details (bn, an, d, n, zp, zv, a, du, c, dup, f, gmt, s, hd, hdu_s, hc, nr, hn, cdirection, hnsyf) VALUES('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s','%s', '%s', '%s', '%s')" % (bn, an, value['d'], value['n'], value['zp'], value['zv'], value['a'], value['du'], value['c'], value['dup'], value['f'], value['gmt'], value['s'], value["hd"], value["hdu_s"], value["hc"], nr, value["hn"], value["cdirection"], value["hnsyf"]))
-		except psycopg2.IntegrityError:
-			if not C_QUITE:
-				print("Дубликат ключей: %s" % ( value))
-			self.conn.rollback()
-		except Exception as e:
-			self.conn.commit()
-			raise ValueError("Ошибка в запросе к бд: %s" % (e,))
+		# try:
+		# 	cur.execute("INSERT INTO details (bn, an, d, n, zp, zv, a, du, c, dup, f, gmt, s, hd, hdu_s, hc, nr, hn, cdirection, hnsyf) VALUES('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s','%s', '%s', '%s', '%s')" % (bn, an, value['d'], value['n'], value['zp'], value['zv'], value['a'], value['du'], value['c'], value['dup'], value['f'], value['gmt'], value['s'], value["hd"], value["hdu_s"], value["hc"], nr, value["hn"], value["cdirection"], value["hnsyf"]))
+		# except psycopg2.IntegrityError:
+		# 	if not C_QUITE:
+		# 		print("Дубликат ключей: %s" % ( value))
+		# 	self.conn.rollback()
+		# except Exception as e:
+		# 	self.conn.commit()
+		# 	raise ValueError("Ошибка в запросе к бд: %s" % (e,))
 
-		self.conn.commit()
+		# self.conn.commit()
 
-		cur.close
+		# cur.close
 
 	def add_one_detail(self, value, unn, nr):
 
 		value = self.filter(value)
 
-		cur = self.conn.cursor()
+		self.add_buf.write( "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (value['d'], value['n'], value['zp'], value['zv'], value['a'], value['du'], value['c'], value['dup'], value['f'], value['gmt'], value['s'], value["hd"], value["hdu_s"], value["hc"], value["hn"], value["cdirection"], value["hnsyf"], nr, unn ))
+
+		# cur = self.conn.cursor()
 		
-		try:
-			cur.execute("INSERT INTO details (d, n, zp, zv, a, du, c, dup, f, gmt, s, hd, hdu_s, hc, hn, cdirection, hnsyf, nr, unn) VALUES('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s','%s', '%s', '%s')" % (value['d'], value['n'], value['zp'], value['zv'], value['a'], value['du'], value['c'], value['dup'], value['f'], value['gmt'], value['s'], value["hd"], value["hdu_s"], value["hc"], value["hn"], value["cdirection"], value["hnsyf"], nr, unn) )
-		except psycopg2.IntegrityError:
-			if not C_QUITE:
-				print("Дубликат ключей: %s" % ( value))
-			self.conn.rollback()
-		except Exception as e:
-			self.conn.commit()
-			raise ValueError("Ошибка в запросе к бд: %s" % (e,))
+		# try:
+		# 	cur.execute("INSERT INTO details (d, n, zp, zv, a, du, c, dup, f, gmt, s, hd, hdu_s, hc, hn, cdirection, hnsyf, nr, unn) VALUES('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s','%s', '%s', '%s')" % (value['d'], value['n'], value['zp'], value['zv'], value['a'], value['du'], value['c'], value['dup'], value['f'], value['gmt'], value['s'], value["hd"], value["hdu_s"], value["hc"], value["hn"], value["cdirection"], value["hnsyf"], nr, unn) )
+		# except psycopg2.IntegrityError:
+		# 	if not C_QUITE:
+		# 		print("Дубликат ключей: %s" % ( value))
+		# 	self.conn.rollback()
+		# except Exception as e:
+		# 	self.conn.commit()
+		# 	raise ValueError("Ошибка в запросе к бд: %s" % (e,))
 
-		self.conn.commit()
+		# self.conn.commit()
 
-		cur.close
+		# cur.close
 
 
 
@@ -242,6 +262,7 @@ def ctohc(c):
 
 # Разбираем xml файл и ложим его в базу		
 def parse_xml(f_xml):
+
 	try:
 		tree = ET.parse(f_xml)
 	except Exception as e:
@@ -304,17 +325,17 @@ def parse_xml(f_xml):
 			
 			for i in ds.findall('i'):
 				db.add_detail(bn, an, nr, i.attrib)
-				# db.add_detail_commit()
+			db.add_detail_commit()
 
 			if not C_QUITE:
 		 		print("[I] Завершена обработка: %s" % (nr))
 	
 	except psycopg2.IntegrityError as e:
 		print("Внимание: дубликат ключей в базе")
-	except Exception as e:
-		print("Ошибка в запросе к бд: %s" % (e,))
-		db.conn.rollback()
-		db.execute("delete from invoices where bn='%s' and an='%s'" % ( bn, an ))
+	# except Exception as e:
+	# 	print("Ошибка в запросе к бд: %s" % (e,))
+	# 	db.conn.rollback()
+	# 	db.execute("delete from invoices where bn='%s' and an='%s'" % ( bn, an ))
 
 # Разбираем xml файл для одной записи (телефонного номера)
 def parse_xml_one_mode(f_xml):
@@ -350,6 +371,7 @@ def parse_xml_one_mode(f_xml):
 		# --------------
 		for i in root.findall("./ds/i"):
 			db.add_one_detail(i.attrib, unn, nr)
+		db.add_one_detail_commit()
 
 	except psycopg2.IntegrityError as e:
 		print("\tВнимание: дубликат ключей в базе")
@@ -377,6 +399,8 @@ def path_processing(func_processing, path):
 		path = tmp_dir
 
 	if os.path.isfile(path):
+		if not C_QUITE:
+			print("[I] Обработка файла:", path)
 		func_processing(path)
 
 	if os.path.isdir(path):
