@@ -67,6 +67,10 @@ class bill:
 		l = list(set(attr_reqire) - set(value.keys()))
 		if len(l) != 0:
 			raise ValueError("В списке отсутствуют обязательные поля: %s"%(l))
+		
+		# Фильтруем символ табуляции
+		value['zv'] = value['zv'].replace("\t",' ')
+		value['zp'] = value['zp'].replace("\t",' ')
 
 		# Преобразуем дату к формату timestamp без часового пояса
 		hd = datetime.strptime( value['d'] + " " + value["gmt"].replace(':','') , "%d.%m.%Y %H:%M:%S %z")
@@ -129,6 +133,7 @@ class bill:
 		try:
 			cur.copy_expert("copy details (bn, an, d, n, zp, zv, a, du, c, dup, f, gmt, s, hd, hdu_s, hc, nr, hn, cdirection, hnsyf) from STDIN" % (), self.add_buf)
 		except Exception as e:
+			print(self.add_buf)
 			self.conn.commit()
 			raise ValueError("Ошибка в запросе к бд: %s" % (e,))
 
